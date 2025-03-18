@@ -350,8 +350,83 @@ for (var in continuous_vars) {
 # for easy use later....
 
 write.csv(data, file = "data_clean.csv", row.names = FALSE)
+save(data, file = "data_clean.rda")
 ```
 
 
+---
+
+```{r}
+data_clean <- read.csv("data_clean.csv")
+```
+
+Before getting hands-on with the classification part, I want to convert some of the variables into factors. These variables will be the **binary** and **categorical ones**.
+
+**Namely:**
+
+obesity_level (target variable)
+
+Gender
+
+family_history_with_overweight
+
+eats_high_cal_freq
+
+eats_btw_meals
+
+SMOKE
+
+monitors_calories
+
+alcohol_freq
+
+transportation_type
+
+
+```{r}
+
+data_clean$obesity_level <- as.factor(data_clean$obesity_level)
+
+data_clean$Gender <- as.factor(data_clean$Gender)
+
+data_clean$family_history_with_overweight <- as.factor(data_clean$family_history_with_overweight)
+
+data_clean$eats_high_cal_freq <- as.factor(data_clean$eats_high_cal_freq)
+
+data_clean$eats_btw_meals <- as.factor(data_clean$eats_btw_meals)
+
+data_clean$SMOKE <- as.factor(data_clean$SMOKE)
+
+data_clean$monitors_calories <- as.factor(data_clean$monitors_calories)
+
+data_clean$alcohol_freq <- as.factor(data_clean$alcohol_freq)
+
+data_clean$transportation_type <- as.factor(data_clean$transportation_type)
+
+```
+
+Through below chunk, I have checked and confirmed that all binary and categorical variables are successfully converted into factors and have valid levels
+
+```{r eval=FALSE, include=FALSE}
+factor_levels <- lapply(data_clean[sapply(data_clean, is.factor)], levels)
+print(factor_levels)
+```
+
+---
+
+## CLASSIFICATION
+
+!!!!!!!!! Add some notes here
+
+### Training and Testing sets
+
+```{r}
+set.seed(123)
+
+train_index <- sample(1:nrow(data_clean), 0.8 * nrow(data_clean))
+
+train_data <- data_clean[train_index, ]
+test_data <- data_clean[-train_index, ]
+```
 
 
