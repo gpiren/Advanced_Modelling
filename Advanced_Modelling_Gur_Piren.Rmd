@@ -1,0 +1,357 @@
+---
+title: "Advanced_Modelling_Gur_Piren"
+output: html_document
+date: "2025-03-17"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Classification Target: NObesity (categorical, 7 levels).
+
+Regression Target: Weight
+
+## PACKAGES
+
+```{r message=FALSE}
+library(tidyverse)
+library(dplyr)
+library(explore)
+library(DataExplorer)
+library(gtsummary)
+library(skimr)
+library(codebook)
+library(knitr)  # For kable function
+library(kableExtra)
+```
+
+------------------------------------------------------------------------
+
+## DATA AND DESCRIPTIVE ANALYSIS
+
+Reading the data
+
+```{r message=FALSE}
+
+data <- read.csv("ObesityDataSet.csv")
+
+is.data.frame(data)
+```
+
+### Data Cleaning
+
+We already have our dataset as a data frame
+
+Some of the variables do not have informative names and I prefer fixing that.
+In doing so, I'll be using the 'Variables Table' from the source website:
+
+<https://archive.ics.uci.edu/dataset/544/estimation+of+obesity+levels+based+on+eating+habits+and+physical+condition>
+
+```{r}
+
+colnames(data)
+
+data <- data |> 
+  rename(
+    eats_high_cal_freq = FAVC,
+    meals_w_vegetables = FCVC,
+    daily_meals = NCP,
+    eats_btw_meals = CAEC,
+    daily_water = CH2O,
+    monitors_calories = SCC,
+    physical_activity_freq = FAF,
+    time_on_devices = TUE,
+    alcohol_freq = CALC,
+    transportation_type = MTRANS,
+    obesity_level = NObeyesdad
+  )
+
+
+# I also want to fix the values some of the categorical variables take on, eliminating tokens such as underscores ('_') etc. See subsequent chunks for that.
+
+```
+
+Super weird, but some of the age values are written with decimals: 18.50334, 21.85383 etc.
+
+I will round those numbers to the most approximate values.
+
+I will perform the same procedure for Height and Weight values too, while converting Height into cm measure.
+
+Quite interestingly, the variable for daily meals and daily meals with vegetables also takes on decimal numbers, I will approximate those values as well.
+
+The situation is the same for the liters of water drunk for respondents.
+However I might actually consider leaving this as it is, because it can provide some variance and people do not drink precisely two or three liters of water.
+
+Physical activities and time spent on technological devices are also reported as decimal numbers.
+I honestly don't know why these are happening, however, I think the best solution is to approximate those values either to the floor or the ceiling depending on each number
+
+```{r message=FALSE}
+
+data <- data |> 
+  mutate(
+    # For continuous variables, round as needed
+    Age = round(Age),  # Round Age to the nearest integer
+    meals_w_vegetables = round(meals_w_vegetables),  # Round meals_w_vegetables to capture as integer
+    daily_meals = round(daily_meals),  # Round daily meals to the nearest integer
+    daily_water = round(daily_water),  # Round daily water intake to the nearest integer
+    physical_activity_freq = round(physical_activity_freq),  # Round physical activity freq
+    time_on_devices = round(time_on_devices),  # Round time on devices to the nearest integer
+    
+    # Adjust the Height column to centimeters
+    Height = round(Height * 100, 0),  # Convert height in meters to centimeters and round
+
+    # Adjust the Weight column, rounding to nearest integer
+    Weight = round(Weight)  # Round weight to the nearest whole number
+  )
+print(data)
+```
+
+Another problem relates to the column that indicates the frequencies of each respondent to eat in between his/her meals and alcohol usage.
+
+eats_btw_meals: "Sometimes" "Frequently" "Always" "no"
+
+alcohol_freq: "no" "Sometimes" "Frequently" "Always"
+
+These are obviously unbalanced distributions of numbers, giving no representation for people who who 'Rarely' eats in between meals and uses alcohol.
+To address that, I considered inserting an additional level named 'Rarely', however, since the variables at hand are categorical and the responses are actually reported by the interviewees, it would be wrong to capture an answer that they did not explicitly selected.
+
+That is why I will not change the structure of 'eats_btw_meals' and 'alcohol_freq', however, I think there is an inherent issue with the design of both variables.
+
+```{r}
+# not going to add a new level to 'eats_btw_meals' and 'alcohol_freq'
+```
+
+Finally, I will perform some adjustments in the values 'obesity_level' and 'transportation_type' variables take on, eliminating underscores (\_) from values
+
+```{r}
+unique(data$obesity_level)
+
+data <- data %>%
+  mutate(
+    obesity_level = str_replace_all(obesity_level, "_", " "),  # Replace underscores with spaces
+    transportation_type = str_replace_all(transportation_type, "_", " ")  # Replace underscores with spaces
+  )
+
+# View the modified values
+print(data %>% select(obesity_level, transportation_type))
+
+```
+
+------------------------------------------------------------------------
+
+### Variables
+
+1.  Gender - Categorical
+
+2.  Age - Continuous
+
+3.  Height - Continuous
+
+4.  Weight - Continuous
+
+5.  family_history_with_overweight - Binary
+
+Has a family member suffered or suffers from overweight?
+
+6.  eats_high_cal_freq - Binary
+
+Do you eat high caloric food frequently?
+
+7.  meals_w_vegetables - Integer
+
+Do you usually eat vegetables in your meals?
+
+8.  daily_meals - Continuous
+
+How many main meals do you have daily?
+
+9.  eats_btw_meals - Categorical
+
+Do you eat any food between meals?
+
+10. SMOKE - Binary
+
+Do you smoke?
+
+11. daily_water - Continuous
+
+How much water do you drink daily?
+
+12. monitors_calories - Binary
+
+Do you monitor the calories you eat daily?
+
+13. physical_activity_freq - Continuous
+
+How often do you have physical activity?
+
+14. time_on_devices - Integer
+
+How much time do you use technological devices such as cell phone, videogames, television, computer and others?
+
+15. alcohol_freq - Categorical
+
+How often do you drink alcohol?
+
+16. transportation_type - Categorical
+
+Which transportation do you usually use?
+
+17. obesity_level - Categorical
+
+Obesity level
+
+To see all the variable names and beyond, remove the chunk settings and check the codebook html file, the codebook will be shared in the submission file:
+
+```{r eval=FALSE, message=FALSE, include=FALSE}
+codebook_data <- codebook(data)
+
+html_file <- "codebook.html"
+kable(codebook_data) %>%
+  kable_styling() %>%
+  save_kable(file = html_file)
+
+# Confirm the codebook's location
+print(paste("Codebook saved to:", html_file))
+```
+
+------------------------------------------------------------------------
+
+Let's begin with exploring our dataset
+
+The dataset consists of 2.111 observations across 17 variables, 9 of them being characters and 8 of them being numeric
+
+There is no missing values in the dataset
+
+```{r}
+data |> describe_tbl()
+skim(data)
+
+```
+
+
+---
+
+**Sample Size:** The total number of respondents in the study is 2,111.
+
+**Gender Distribution:** The gender distribution is relatively balanced, with 51% Male (1,068 respondents) and 49% Female (1,043 respondents).
+
+**Age:** The mean age of respondents is 24 years, with a standard deviation of 6 years, indicating a youthful population.
+
+**Height:** The average height is 170 cm with a standard deviation of 9 cm, reflecting a generally consistent height range among respondents.
+
+**Weight:** The average weight is 87 kg with a standard deviation of 26 kg, suggesting variability in body weight among participants.
+
+**Family History of Overweight:** A significant majority (82%) of respondents have a family history of overweight, indicating a potential genetic or environmental risk factor.
+
+**High-Caloric Food:** A large percentage (88%) report frequently eating high-caloric foods.
+
+**Meals with Vegetables:** Most participants eat vegetables in 2 (1,013 or 48%) or 3 (996 or 47%) of their meals, with only a small fraction (102 or 4.8%) consuming them in 1 meal.
+
+**Daily Meals:** 70% have 3 main meals daily, while the remaining spread across 1 to 4 meals, indicating a preference for a three-meal structure.
+
+**Eating Between Meals:** Majority: A significant 84% of respondents eat between meals "Sometimes," indicating less frequent snacking among participants (the other categories have very low frequencies).
+
+**Smoking Habits:** A small portion of participants (2.1%) reported being smokers.
+
+**Daily Water Intake:** Water intake is moderately distributed with 53% consuming 2 liters daily; 24% hold 3 liters, and 23% consume only 1 liter.
+
+**Monitoring Calories:** Only 4.5% of respondents actively monitor their calorie intake, suggesting that calorie counting may not be widely practiced among the sample.
+
+**Physical Activity Frequency:** A large number of participants (34%) reported no physical activity (0), while the rest reported varying degrees of activity, with the largest group (37%) indicating a low level of activity (1).
+
+**Time on Devices:** Most participants (45%) spend 0 (probably 0 to 1) hours on devices, while 43% spend 1 (1 to less than 2) hour, indicating diverse usage patterns of technology.
+
+**Alcohol Consumption:** A notable 66% of respondents reported "Sometimes" consuming alcohol, with 30% stating they do not drink at all.
+
+**Transportation Choices:** 75% of respondents use public transportation, indicating a significant reliance on public transit.
+Cars, bikes, and walking are used minimally compared to public transport.
+
+**Obesity Levels:** The distribution of obesity levels shows that 14% have normal weight, while another 14% are classified as overweight (both levels), and several categories of obesity exist, with the highest percentage (17%) categorized as Obesity Type I.
+
+---
+
+For visual learners, here are some basic box plots so that we can clearly see which values/responses are prominent in each variable
+
+##### For continuous variables
+
+```{r}
+
+categorical_colors <- c("#FF9A8B", "#FFD3B6", "#B9FBC0", "#A0C4FF", 
+                        "#D5AAFF", "#FFE156", "#FBCBDB", "#FF677D", 
+                        "#6FBF9D")  # Modify or expand as needed
+
+# Function to create bar plots for categorical variables with custom colors
+create_bar_plot <- function(data, variable) {
+  ggplot(data, aes_string(x = variable, fill = variable)) +
+    geom_bar() +
+    scale_fill_manual(values = categorical_colors) +  # Apply the custom colors
+    theme_minimal() +
+    labs(title = paste("Distribution of", variable), x = variable, y = "Count") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+}
+
+# List of categorical variables
+categorical_vars <- c("Gender", 
+                      "family_history_with_overweight", 
+                      "eats_high_cal_freq", 
+                      "eats_btw_meals", 
+                      "SMOKE", 
+                      "monitors_calories", 
+                      "alcohol_freq", 
+                      "transportation_type", 
+                      "obesity_level")
+
+# Generate plots for each categorical variable
+for (var in categorical_vars) {
+  print(create_bar_plot(data, var))
+}
+
+```
+
+
+
+---
+
+
+##### For continuous variables
+
+```{r}
+histogram_colors <- c("#FF6F61", "#6B5B93", "#88B04B", "#F7CAC9", "#92A8D1",
+                       "#955251", "#B9D1EA")  # You can modify or expand this as needed
+
+# Function to create histograms for continuous variables with custom colors
+create_histogram <- function(data, variable) {
+  ggplot(data, aes_string(x = variable)) +
+    geom_histogram(binwidth = 1, fill = histogram_colors[which(continuous_vars == variable)], 
+                   color = "black", alpha = 0.7) +
+    theme_minimal() +
+    labs(title = paste("Distribution of", variable), x = variable, y = "Count")
+}
+
+# List of continuous variables
+continuous_vars <- c("Age", "Height", "Weight", "daily_meals", 
+                     "daily_water", "physical_activity_freq", "time_on_devices")
+
+# Generate histograms for each continuous variable
+for (var in continuous_vars) {
+  print(create_histogram(data, var))
+}
+```
+
+---
+
+```{r eval=FALSE, include=FALSE}
+
+# for easy use later....
+
+write.csv(data, file = "data_clean.csv", row.names = FALSE)
+```
+
+
+
+
