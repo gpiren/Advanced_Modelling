@@ -1,32 +1,57 @@
 ---
-title: "Advanced_Modelling_Gur_Piren"
-output: html_document
-date: "2025-03-17"
+title: "Advanced Modelling - Final Assignment"
+author: "Gür Piren"
+format:
+  html:
+    self-contained: true
+    embed-resources: true 
+    toc: true
+    toc-location: left
+    toc-floating: true
+    toc-depth: 3  
+    number-sections: true
+date: "2025-03-20"
 editor_options: 
   markdown: 
     wrap: sentence
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+## INTRODUCTION
 
-Classification Target: NObesity (categorical, 7 levels).
+This study investigates the factors influencing obesity by analyzing a dataset containing demographic, lifestyle, and behavioral variables such as age, gender, family history of overweight, eating habits, and physical activity. The primary goal is to classify individuals into four obesity levels—Insufficient Weight, Normal Weight, Overweight, and Obesity—using classification techniques like Random Forest, QDA, and Multinomial Logistic Regression, focusing on both prediction accuracy and interpretability of key predictors. Additionally, the study aims to predict an individual’s weight as a numerical outcome through advanced regression methods, including Ridge, Lasso, Elastic Net, and Random Forest regression, to understand the impact of these factors on weight and improve predictive performance for obesity-related outcomes.
 
-Regression Target: Weight
+
 
 ## PACKAGES
 
 ```{r message=FALSE}
+
+rm(list=ls()) 
+
 library(tidyverse)
 library(dplyr)
+library(stringr)
 library(explore)
 library(DataExplorer)
 library(gtsummary)
 library(skimr)
 library(codebook)
-library(knitr)  # For kable function
+library(knitr)
 library(kableExtra)
+library(MASS)
+library(caret)
+library(nnet)
+library(ggeffects)
+library(ggiraphExtra)
+library(smotefamily)
+library(randomForest)
+library(MLmetrics)
+library(pdp)
+library(glmnet)
+library(gridExtra)
+library(xgboost)
+
+
 ```
 
 ------------------------------------------------------------------------
@@ -89,24 +114,19 @@ However I might actually consider leaving this as it is, because it can provide 
 Physical activities and time spent on technological devices are also reported as decimal numbers.
 I honestly don't know why these are happening, however, I think the best solution is to approximate those values either to the floor or the ceiling depending on each number
 
-```{r message=FALSE}
-
+```{r}
+#| include: false
 data <- data |> 
   mutate(
-    # For continuous variables, round as needed
-    Age = round(Age),  # Round Age to the nearest integer
-    meals_w_vegetables = round(meals_w_vegetables),  # Round meals_w_vegetables to capture as integer
-    daily_meals = round(daily_meals),  # Round daily meals to the nearest integer
-    daily_water = round(daily_water),  # Round daily water intake to the nearest integer
-    physical_activity_freq = round(physical_activity_freq),  # Round physical activity freq
-    time_on_devices = round(time_on_devices),  # Round time on devices to the nearest integer
-    
-    # Adjust the Height column to centimeters
-    Height = round(Height * 100, 0),  # Convert height in meters to centimeters and round
+    Age = round(Age),  
+    meals_w_vegetables = round(meals_w_vegetables),  
+    daily_meals = round(daily_meals),  
+    daily_water = round(daily_water),  
+    physical_activity_freq = round(physical_activity_freq),  
+    time_on_devices = round(time_on_devices),  
+    Height = round(Height * 100, 0),  
+    Weight = round(Weight, 1))
 
-    # Adjust the Weight column, rounding to nearest integer
-    Weight = round(Weight)  # Round weight to the nearest whole number
-  )
 print(data)
 ```
 
@@ -130,14 +150,10 @@ Finally, I will perform some adjustments in the values 'obesity_level' and 'tran
 ```{r}
 unique(data$obesity_level)
 
-data <- data %>%
+data <- data |> 
   mutate(
-    obesity_level = str_replace_all(obesity_level, "_", " "),  # Replace underscores with spaces
-    transportation_type = str_replace_all(transportation_type, "_", " ")  # Replace underscores with spaces
-  )
-
-# View the modified values
-print(data %>% select(obesity_level, transportation_type))
+    obesity_level = str_replace_all(obesity_level, "_", " "),  
+    transportation_type = str_replace_all(transportation_type, "_", " "))
 
 ```
 
@@ -215,8 +231,6 @@ kable(codebook_data) %>%
   kable_styling() %>%
   save_kable(file = html_file)
 
-# Confirm the codebook's location
-print(paste("Codebook saved to:", html_file))
 ```
 
 ------------------------------------------------------------------------
@@ -244,7 +258,7 @@ skim(data)
 
 **Height:** The average height is 170 cm with a standard deviation of 9 cm, reflecting a generally consistent height range among respondents.
 
-**Weight:** The average weight is 87 kg with a standard deviation of 26 kg, suggesting variability in body weight among participants.
+**Weight:** The average weight is 86.59 kg with a standard deviation of 26.19 kg, suggesting variability in body weight among participants.
 
 **Family History of Overweight:** A significant majority (82%) of respondents have a family history of overweight, indicating a potential genetic or environmental risk factor.
 
@@ -283,19 +297,17 @@ For visual learners, here are some basic box plots so that we can clearly see wh
 
 categorical_colors <- c("#FF9A8B", "#FFD3B6", "#B9FBC0", "#A0C4FF", 
                         "#D5AAFF", "#FFE156", "#FBCBDB", "#FF677D", 
-                        "#6FBF9D")  # Modify or expand as needed
+                        "#6FBF9D")  
 
-# Function to create bar plots for categorical variables with custom colors
 create_bar_plot <- function(data, variable) {
   ggplot(data, aes_string(x = variable, fill = variable)) +
     geom_bar() +
-    scale_fill_manual(values = categorical_colors) +  # Apply the custom colors
+    scale_fill_manual(values = categorical_colors) +  
     theme_minimal() +
     labs(title = paste("Distribution of", variable), x = variable, y = "Count") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  
 }
 
-# List of categorical variables
 categorical_vars <- c("Gender", 
                       "family_history_with_overweight", 
                       "eats_high_cal_freq", 
@@ -306,7 +318,6 @@ categorical_vars <- c("Gender",
                       "transportation_type", 
                       "obesity_level")
 
-# Generate plots for each categorical variable
 for (var in categorical_vars) {
   print(create_bar_plot(data, var))
 }
@@ -322,9 +333,8 @@ for (var in categorical_vars) {
 
 ```{r}
 histogram_colors <- c("#FF6F61", "#6B5B93", "#88B04B", "#F7CAC9", "#92A8D1",
-                       "#955251", "#B9D1EA")  # You can modify or expand this as needed
+                       "#955251", "#B9D1EA")
 
-# Function to create histograms for continuous variables with custom colors
 create_histogram <- function(data, variable) {
   ggplot(data, aes_string(x = variable)) +
     geom_histogram(binwidth = 1, fill = histogram_colors[which(continuous_vars == variable)], 
@@ -333,11 +343,10 @@ create_histogram <- function(data, variable) {
     labs(title = paste("Distribution of", variable), x = variable, y = "Count")
 }
 
-# List of continuous variables
+#numeric var list
 continuous_vars <- c("Age", "Height", "Weight", "daily_meals", 
                      "daily_water", "physical_activity_freq", "time_on_devices")
 
-# Generate histograms for each continuous variable
 for (var in continuous_vars) {
   print(create_histogram(data, var))
 }
@@ -412,21 +421,866 @@ factor_levels <- lapply(data_clean[sapply(data_clean, is.factor)], levels)
 print(factor_levels)
 ```
 
+
+One thing I want to do before I move onto the training and testing sets is to combine 'Overweight I and II' as well as unify 'Obesity Level I, II, and III'. Subsequent to this, I will end up having 4 levels in 'obesity_level' variable. This is because I believe that combining some of the levels by simplifying those concepts that refer to similar conditions will improve the generalizability power of future models.
+
+
+I also want to recode obesity_level in a logically ordered way
+
+```{r}
+
+data_clean$obesity_level <- factor(data_clean$obesity_level,
+                                    levels = c("Normal Weight", "Overweight Level I", "Overweight Level II", "Obesity Type I", "Insufficient Weight", "Obesity Type II", "Obesity Type III"),
+                                    labels = c("Normal Weight", "Overweight", "Overweight", "Obesity", "Insufficient Weight", "Obesity", "Obesity"))
+
+
+data_clean$obesity_level <- recode(data_clean$obesity_level,
+                                   "Overweight Level I" = "Overweight",
+                                   "Overweight Level II" = "Overweight",
+                                   "Obesity Type I" = "Obesity",
+                                   "Obesity Type II" = "Obesity",
+                                   "Obesity Type III" = "Obesity")
+
+
+obesity_levels <- c("Insufficient Weight", "Normal Weight", 
+                    "Overweight", "Obesity")
+
+# to have the target variable ordered, will be good for plots
+
+data_clean$obesity_level <- factor(data_clean$obesity_level, 
+                                    levels = obesity_levels,
+                                    ordered = TRUE)
+```
+
+
 ---
 
 ## CLASSIFICATION
 
 !!!!!!!!! Add some notes here
 
+### ANOVA - Numerical variables
+
+```{r}
+
+numerical_vars <- c("Age", "Height", "Weight", "meals_w_vegetables", "daily_meals", 
+                    "daily_water", "physical_activity_freq", "time_on_devices")
+
+# ANOVA for each numerical variable vs obesity_level
+anova_results <- lapply(numerical_vars, function(var) {
+  anova_result <- aov(formula = data_clean[, var] ~ data_clean$obesity_level, data = data_clean)
+  summary(anova_result)
+})
+
+```
+
+---
+
+**Age:** Little variation across obesity levels; no clear trend, with overlapping medians.
+
+**daily_meals:** Slightly higher medians for overweight and obesity levels, but variation is minimal.
+
+**daily_water:** Higher medians for normal and overweight levels, lower for obesity; some distinction.
+
+**Height:** Consistent across levels, with slight increases in spread for higher obesity categories.
+
+**meals_w_vegetables:** Higher medians for normal and overweight, lower for obesity; suggests a trend.
+
+**physical_activity_freq:** Lower medians for obesity levels, indicating less activity with higher obesity.
+
+**time_on_devices:** Similar medians across levels, with wider spread in obesity categories.
+
+**Weight:** Clear increasing trend with obesity level, with distinct medians for each category.
+
+
+```{r}
+# getting the plot ready
+plot_data <- data_clean %>% 
+  pivot_longer(cols = all_of(numerical_vars), names_to = "Variable", values_to = "Value")
+
+# boxplots for ANOVA results
+
+ggplot(plot_data, aes(x = obesity_level, y = Value, fill = obesity_level)) +
+  geom_boxplot() +
+  facet_wrap(~ Variable, scales = "free_y", ncol = 4) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Boxplots of Numerical Variables vs Obesity Level", 
+       x = "Obesity Level", y = "Value")
+```
+
+
+---
+
+### Chi-square test - Categorical variables
+
+**alcohol_freq:** Higher frequencies of "Sometimes" across all obesity levels, with a peak in normal weight.
+
+**eats_btw_meals:** "Sometimes" dominates, with slight increases in overweight/obesity levels.
+
+**eats_high_cal_freq:** "yes" is more frequent in overweight and obesity levels, suggesting a link.
+
+**family_history_with_overweight:** "yes" is prevalent across all levels, especially in obesity, indicating a strong association.
+
+**Gender:** "Male" and "Female" distributions vary, with "Male" slightly higher in obesity.
+
+**monitors_calories:** "no" is common across all levels, with minor variation.
+
+**SMOKE:** "no" is dominant, with little difference across levels.
+
+**transportation_type:** "Public Transportation" and "Automobile" are frequent, with "Walking" less common in obesity.
+
+These patterns suggest **family_history_with_overweight** and **eats_high_cal_freq** may be key predictors.
+
+Also, **monitors_calories** also appears as a potentially key variable. It might just be that people with weight problems are more likely to keep track of their calories as they get on a diet very often
+
+
+```{r}
+
+# Categorical variables
+categorical_vars <- c("Gender", "family_history_with_overweight", "eats_high_cal_freq", 
+                      "eats_btw_meals", "SMOKE", "monitors_calories", "alcohol_freq", 
+                      "transportation_type")
+
+# Create a list to store contingency tables
+contingency_list <- lapply(categorical_vars, function(var) {
+  table(data_clean[, var], data_clean$obesity_level)
+})
+
+# Initialize proper data frame
+plot_data_2 <- data.frame()  # Initialize an empty data frame to store results
+
+# Fill the data frame with contingency data
+for (i in seq_along(categorical_vars)) {
+  temp_df <- as.data.frame(contingency_list[[i]])
+  temp_df$Variable <- categorical_vars[i]
+  plot_data_2 <- rbind(plot_data_2, temp_df)  # Append rows to the existing data frame
+}
+
+# Rename columns for clarity
+colnames(plot_data_2) <- c("Category", "Obesity_Level", "Freq", "Variable")
+
+
+ggplot(plot_data_2, aes(x = Obesity_Level, y = Freq, fill = Category)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom") +
+  labs(title = "Contingency Tables of Categorical Variables vs Obesity Level",
+       x = "Obesity Level", y = "Frequency", fill = "Category") +
+  scale_fill_manual(values = c("Female" = "#FF9999",    
+                               "Male" = "#66B3FF",      
+                               "yes" = "#228B22",       
+                               "no" = "#FFCC99",        
+                               "Always" = "#FFCCFF",   
+                               "Frequently" = "#FFD700", 
+                               "Sometimes" = "#B0E0E6", 
+                               "Automobile" = "#FFA07A", 
+                               "Bike" = "#A76B9A",       
+                               "Motorbike" = "#FFE4E1",  
+                               "Public Transportation" = "#D8BFD8", 
+                               "Walking" = "#FFFACD"))
+  
+```
+
+---
+
 ### Training and Testing sets
+
+#### Splitting
+
+Training set will have 1.690 observations, whereas testing set will have 421.
+
+```{r}
+
+set.seed(123)
+
+in_train <- createDataPartition(data_clean$obesity_level, p = 0.8, list = FALSE)
+
+training <- data_clean[ in_train,]
+testing <- data_clean[-in_train,]
+
+# Check number of rows in both sets
+nrow(training)
+nrow(testing)
+```
+
+---
+
+### Multinomial regression
+
+Since the target variable is categorical (with 4 levels), I applied a multinomial regression to examine the influence of various factors on obesity levels. This model helps us understand the relationships between these variables and the likelihood of different obesity statuses.
+
+For this specific model, I included Age, Family History of Overweight, Frequency of Eating High-Calorie Foods, and Frequency of Physical Activity.
+
+Family history with overweight shows a strong positive relationship with obesity, suggesting that individuals with a family history of overweight are more likely to be obese.
+
+Eating high-calorie foods has a strong positive relationship with obesity, indicating that frequent consumption of high-calorie foods increases the likelihood of being classified as obese.
+
+The positive coefficient of age suggests that as individuals grow older, their likelihood of being overweight or obese increases. This could be due to a slowing metabolism over time.
+
+The negative relationship between physical activity and obesity levels indicates that more frequent physical activity reduces the likelihood of being overweight or obese.
+
+```{r}
+multinom_model <- multinom(obesity_level ~ Age + family_history_with_overweight + eats_high_cal_freq +
+                             physical_activity_freq, data = training) 
+summary(multinom_model)
+```
+
+---
+
+Let's try to use Age as a quadratic term to capture nonlinear effects before we move on.
+
+In the model, age shows a positive coefficient, meaning that as age increases, the likelihoods of being overweight or obese also increase.
+
+Age2 has a negative coefficient, suggesting that the relationship between age and obesity is not strictly linear. Instead, the effect of age decreases at higher values. This tells us that while age initially increases the risk of higher obesity levels, however, the effect diminishes at even higher ages
+
+```{r}
+training$Age2 <- training$Age^2  
+multinom_model_2 <- multinom(obesity_level ~ Age + Age2 + family_history_with_overweight + eats_high_cal_freq + physical_activity_freq, data = training)
+
+summary(multinom_model_2)
+
+```
+
+---
+
+
+To compare model fit with the linear model
+
+The quadratic model has a lower AIC than the linear model,indicating better model fit when including Age2
+
+```{r}
+AIC(multinom_model)  # 3418.92
+AIC(multinom_model_2)  # 3393.569
+
+```
+
+
+---
+
+
+Context for odds ratios:
+
+Odds ratios measure how a predictor affects the odds of an outcome, making it easier to interpret than raw coefficients. 
+
+Since logistic and multinomial regression use logarithms of odds, exponentiating the coefficients gives odds ratios, which tells us how much the odds change for a one-unit increase in a variable.
+
+We have used this method during the class, so I want to check exponential coefficients. According to the results:
+
+Age2 suggests that obesity risk first increases with age but may level off or decrease at very high ages.
+
+Family history with overweight strongly influences the likelihood of being classified as Obese, with a much higher coefficient for Obesity compared to other levels. 
+
+Eating high-calorie meals also shows a positive relationship with Obesity, while Physical activity frequency negatively impacts the likelihood of being in Obesity or Overweight categories. This indicates that more physical activity reduces the chances of higher obesity levels.
+
+```{r}
+
+exp(coef(multinom_model_2))
+
+```
+
+---
+
+For easier interpretation
+
+```{r}
+
+#gg.pred = ggpredict(multinom_model_2, terms = "obesity_level")
+#plot(gg.pred)
+
+gg.pred = ggpredict(multinom_model_2, terms = c("Age2", "family_history_with_overweight", 
+                                                  "eats_high_cal_freq", "physical_activity_freq"), 
+                    ci_level=NA)
+plot(gg.pred)
+```
+
+---
+
+### Benchmarking
+
+I want to create a benchmark model to later compare with more complex models. This benchmark model will make predictions on the baseline without using any predictors. It will then predict the **probability** of each level in my target variable. It is worth noting that, during the in-class exercise, we used a binary target variable with 'Fail' and 'Success' cases. In this task, the target is different, so I will try to adjust my approach accordingly.
+
+
+The predictions are heavily skewed towards class 3, which could indicate class imbalance in the training data. The model's performance might improve by adding relevant predictors.
+
+
+```{r}
+
+set.seed(123)
+bench_model <- multinom(obesity_level ~ 1, data = training)
+
+# predicting on the testing set
+probability_benchmark <- predict(bench_model, newdata = testing, type = "probs")
+
+
+obesity_levels <- c("Insufficient Weight", "Normal Weight", "Overweight", "Obesity")
+
+prediction_benchmark <- factor(apply(probability_benchmark, 1, which.max), 
+                               levels = 1:4, labels = obesity_levels)
+head(prediction_benchmark)
+```
+
+---
+
+To check what the benchmark predictions imply:
+
+My dataset has a class imbalance, with Obesity (46%) and Overweight (27%) being more frequent than Normal Weight (13%) and Insufficient Weight (13%). This imbalance could bias my model toward the majority classes, making it less effective at predicting the minority ones.
+
+```{r}
+
+set.seed(123)
+prediction_benchmark <- factor(apply(probability_benchmark, 1, which.max),
+                               levels = c("Insufficient Weight", "Normal Weight", 
+                    "Overweight", "Obesity"))
+
+testing$obesity_level <- factor(testing$obesity_level,
+                                levels = c("Insufficient Weight", "Normal Weight", 
+                    "Overweight", "Obesity"))
+
+
+# Check if levels match
+levels(prediction_benchmark)
+levels(testing$obesity_level)
+
+confusionMatrix(prediction_benchmark, testing$obesity_level)$table
+
+
+```
+
+---
+
+
+I have found that there is imbalance in my dataset. Let's try to address it:
+
+```{r}
+
+dummy_vars <- dummyVars(~ Gender + family_history_with_overweight + eats_high_cal_freq + 
+                        eats_btw_meals + SMOKE + monitors_calories + alcohol_freq + 
+                        transportation_type, 
+                        data = training)
+
+training_numeric <- predict(dummy_vars, newdata = training)
+
+
+training_numeric <- cbind(training_numeric, 
+                          training[, c("Age", "Age2", "Height", "Weight", "meals_w_vegetables", 
+                                       "daily_meals", "daily_water", "physical_activity_freq", 
+                                       "time_on_devices")])
+
+# to balance out the data
+
+set.seed(123)
+smote_result <- SMOTE(X = training_numeric, 
+                      target = training$obesity_level, 
+                      K = 5, dup_size = 2)
+
+# extracting the balanced dataset
+balanced_training <- smote_result$data
+
+# renaming the target var because smote sees it as 'class'
+colnames(balanced_training)[which(colnames(balanced_training) == "class")] <- "obesity_level"
+
+# to make sure obesity_level is a factor with correct levels
+balanced_training$obesity_level <- factor(balanced_training$obesity_level, 
+                                          levels = c("Insufficient Weight", "Normal Weight", 
+                                                     "Overweight", "Obesity"))
+table(balanced_training$obesity_level)
+```
+
+---
+
+
+### Random Forest with / Cros validation
+
+
+In this step, I trained a Random Forest model using the caret package with 10-fold cross-validation to optimize the mtry parameter and obtain robust performance estimates. 
+
+The model achieved a cross-validated accuracy of 0.9402, indicating strong predictive performance across the four obesity classes. 
+
+The Random Forest model achieves a high accuracy of 0.9412 (mtry = 5), showing strong performance across the four obesity classes. 
+
+The Kappa of 0.9173 indicates excellent agreement beyond chance, while the Mean_F1 score of 0.9121 and Mean_Sensitivity of 0.9086 suggest balanced and robust predictions, despite potential challenges with the underrepresented Normal_Weight class.
+
+
+```{r}
+
+set.seed(123)
+
+# rename levels of obesity_level to be valid R variable names
+levels(balanced_training$obesity_level) <- c("Insufficient_Weight", "Normal_Weight", "Overweight", "Obesity")
+levels(testing$obesity_level) <- c("Insufficient_Weight", "Normal_Weight", "Overweight", "Obesity")
+
+# for 10-fold cross-validation
+ctrl <- trainControl(method = "cv", number = 10, classProbs = TRUE, 
+                     summaryFunction = multiClassSummary, verboseIter = TRUE)
+
+# training Random Forest using caret
+rf_caret <- train(obesity_level ~ family_history_with_overweight.yes + eats_high_cal_freq.yes + 
+                  physical_activity_freq + Weight + Age + Gender.Male + 
+                  eats_btw_meals.Sometimes + alcohol_freq.Sometimes, 
+                  data = balanced_training, 
+                  method = "rf", 
+                  tuneLength = 5, 
+                  metric = "Accuracy", 
+                  trControl = ctrl)
+print(rf_caret)
+```
+
+
+---
+
+#### Adjusting the prediction threshold
+
+Let's now try to adjust the prediction threshold for the Random Forest model to improve performance on minority classes (Normal_Weight, Insufficient_Weight) by prioritizing their probabilities.  
+
+The threshold adjustment (0.3) for minority classes results in a very low accuracy of 0.247 and a negative Kappa of -0.0643, indicating poor overall performance. 
+
+Sensitivity for Insufficient_Weight (0.8519) and Normal_Weight (0.8246) is decent, showing improved detection of these minority classes, but Sensitivity for Overweight (0.0259) and Obesity (0.0412) is extremely low, meaning the model fails to predict the majority classes effectively.
+
+
+```{r}
+
+set.seed(123)
+
+#test set with dummy variables
+dummy_vars <- dummyVars(~ Gender + family_history_with_overweight + eats_high_cal_freq + 
+                        eats_btw_meals + SMOKE + monitors_calories + alcohol_freq + 
+                        transportation_type, 
+                        data = testing)
+
+# dummy variable transformation to testing set
+testing_numeric <- predict(dummy_vars, newdata = testing)
+
+testing_numeric <- cbind(testing_numeric, 
+                         testing[, c("Age", "Height", "Weight", "meals_w_vegetables", 
+                                     "daily_meals", "daily_water", "physical_activity_freq", 
+                                     "time_on_devices")])
+
+testing_subset <- as.data.frame(testing_numeric)
+testing_subset <- testing_subset[, c("family_history_with_overweight.yes", "eats_high_cal_freq.yes", 
+                                     "physical_activity_freq", "Weight", "Age", "Gender.Male", 
+                                     "eats_btw_meals.Sometimes", "alcohol_freq.Sometimes")]
+testing_subset$obesity_level <- testing$obesity_level
+rf_prob <- predict(rf_caret, newdata = testing_subset, type = "prob")
+
+# adjusting the threshold to 0.3
+threshold <- 0.3
+prediction <- as.factor(apply(rf_prob, 1, function(x) {
+  if (x["Normal_Weight"] > threshold || x["Insufficient_Weight"] > threshold) {
+    names(which.max(x[c("Normal_Weight", "Insufficient_Weight")]))
+  } else {
+    names(which.max(x))
+  }
+}))
+
+levels(prediction) <- levels(testing$obesity_level)
+
+cm_threshold <- confusionMatrix(prediction, testing$obesity_level)
+print(cm_threshold)
+```
+
+---
+
+#### Variable Importance Plots
+
+I'm a bit disappointed but let's create the 'Variable Importance' plots for better interpretation
+
+The variable importance plot for the Random Forest model shows 'Weight' as the most influential predictor for classifying obesity_level, followed by 'Age' and 'family_history_with_overweight.yes.' 'Gender.Male', 'physical_activity_freq', 'eats_btw_meals.Sometimes', 'alcohol_freq.Sometimes', and 'eats_high_cal_freq.yes' have progressively less importance, indicating they contribute less to the model’s decisions.
+
+
+
+```{r}
+rf_imp <- varImp(rf_caret, scale = FALSE)
+plot(rf_imp, scales = list(y = list(cex = 0.95)))
+```
+
+
+---
+
+#### Partial Dependence Plots (PDPs) 
+
+To see the key predictors, we can take a look at partial dependence plots
+
+For instance:
+
+The partial dependence plot for Weight shows that the probability of being classified as Obesity increases sharply from around 50 kg to 100 kg, then plateaus above 0.8, indicating a strong positive relationship between higher weight and the likelihood of obesity. The family_history_with_overweight.yes plot is missing, suggesting an issue with the plotting code or data for that variable.
+
+Also, the plot for family_history_with_overweight.yes shows that the probability of being classified as Obesity remains low (around 0.28) when there’s no family history (0), but increases sharply to 0.36 when there is a family history (1), indicating a significant positive effect on obesity likelihood. The initial dip and flat region suggest some variability in the model’s response at intermediate values.
+
+```{r}
+pdp_weight <- partial(rf_caret, pred.var = "Weight", which.class = "Obesity", 
+                      plot = TRUE, prob = TRUE, rug = TRUE)
+pdp_family_history <- partial(rf_caret, pred.var = "family_history_with_overweight.yes", 
+                              which.class = "Obesity", plot = TRUE, prob = TRUE, rug = TRUE)
+
+print(pdp_weight)
+print(pdp_family_history)
+```
+
+
+
+---
+
+### QDA
+
+As per our class notes, LDA performs better for more than two groups if predictors are somewhat Gaussian. So, I think that Linear Discriminant Analysis (LDA) could be a good starting point.
+
+Age2 was added to capture non-linear effects earlier, but since it’s causing issues (rank deficiency), I'll drop it and let QDA handle non-linearity through its own flexibility
+
+Also, I'll need to eliminate some of the dummy variables that were created earlier, because QDA model is not able to work with the variances and yield results.
+
+The QDA model shows prior probabilities reflecting the balanced training data: Obesity (36.6%) and Insufficient_Weight (30.8%) are the largest groups, while Normal_Weight (10.8%) is the smallest. 
+
+Group means indicate that Obesity has the highest family_history_with_overweight.yes (99.2%), eats_high_cal_freq.yes (98.1%), and Weight (108.5), and the lowest physical_activity_freq (0.87), while Insufficient_Weight has the lowest Weight (49.99) and highest physical_activity_freq (1.26), highlighting clear distinctions in predictors across classes.
+
+
+```{r}
+balanced_training$Age2 <- NULL
+
+near_zero <- nearZeroVar(balanced_training, saveMetrics = TRUE)
+print(near_zero)
+
+if (any(near_zero$nzv)) {
+  balanced_training <- balanced_training[, !near_zero$nzv]
+}
+
+
+testing_numeric <- predict(dummy_vars, newdata = testing)
+testing_numeric <- cbind(testing_numeric, 
+                         testing[, c("Age", "Height", "Weight", "meals_w_vegetables", 
+                                     "daily_meals", "daily_water", "physical_activity_freq", 
+                                     "time_on_devices")])
+
+testing_subset <- as.data.frame(testing_numeric)
+testing_subset <- testing_subset[, c("family_history_with_overweight.yes", "eats_high_cal_freq.yes", 
+                                     "physical_activity_freq", "Weight", "Age", "Gender.Male", 
+                                     "eats_btw_meals.Sometimes", "alcohol_freq.Sometimes")]
+testing_subset$obesity_level <- testing$obesity_level
+
+
+qda_model <- qda(obesity_level ~ family_history_with_overweight.yes + eats_high_cal_freq.yes + 
+                 physical_activity_freq + Weight + Age + Gender.Male + 
+                 eats_btw_meals.Sometimes + alcohol_freq.Sometimes, 
+                 data = balanced_training)
+
+print(qda_model)
+```
+
+
+---
+
+First things first, since I realised that there is imbalance in the data after splitting the training and testing sets, I need to apply insert dummy variables into my test set in order to match other sets and compare model performances.
+
+```{r}
+
+set.seed(123)
+
+dummy_vars_train <- dummyVars(~ Gender + family_history_with_overweight + eats_high_cal_freq + 
+                              eats_btw_meals + SMOKE + monitors_calories + alcohol_freq + 
+                              transportation_type, 
+                              data = training)
+
+training_numeric <- predict(dummy_vars_train, newdata = training)
+training_numeric <- cbind(training_numeric, 
+                          training[, c("Age", "Height", "Weight", "meals_w_vegetables", 
+                                       "daily_meals", "daily_water", "physical_activity_freq", 
+                                       "time_on_devices")])
+
+training_subset <- as.data.frame(training_numeric)
+training_subset$obesity_level <- training$obesity_level
+
+# first, retraining multinom_model_2 without Age2, becuase I removed it
+multinom_model_2 <- multinom(obesity_level ~ family_history_with_overweight.yes + eats_high_cal_freq.yes + 
+                             physical_activity_freq + Weight + Age + Gender.Male + 
+                             eats_btw_meals.Sometimes + alcohol_freq.Sometimes, 
+                             data = training_subset)
+
+summary(multinom_model_2)
+
+# test set with dummy variables
+dummy_vars <- dummyVars(~ Gender + family_history_with_overweight + eats_high_cal_freq + 
+                        eats_btw_meals + SMOKE + monitors_calories + alcohol_freq + 
+                        transportation_type, 
+                        data = testing)
+
+# dummy variable transformation to testing set
+testing_numeric <- predict(dummy_vars, newdata = testing)
+
+testing_numeric <- cbind(testing_numeric, 
+                         testing[, c("Age", "Height", "Weight", "meals_w_vegetables", 
+                                     "daily_meals", "daily_water", "physical_activity_freq", 
+                                     "time_on_devices")])
+
+testing_subset <- as.data.frame(testing_numeric)
+testing_subset <- testing_subset[, c("family_history_with_overweight.yes", "eats_high_cal_freq.yes", 
+                                     "physical_activity_freq", "Weight", "Age", "Gender.Male", 
+                                     "eats_btw_meals.Sometimes", "alcohol_freq.Sometimes")]
+
+testing_subset$obesity_level <- testing$obesity_level
+```
+
+Let's make the predictions
+
+```{r}
+
+qda_pred <- predict(qda_model, newdata = testing_subset)$class
+rf_pred <- predict(rf_caret, newdata = testing_subset)
+multinom_pred <- predict(multinom_model_2, newdata = testing_subset, type = "class")
+
+```
+
+
+#### Model comparison
+
+QDA has an accuracy of 0.772 and a Kappa of 0.652, showing moderate performance but struggling with minority classes like Normal_Weight (Sensitivity 0.6667).  
+Random Forest outperforms with an accuracy of 0.9145 and a Kappa of 0.8735, indicating excellent overall prediction and strong handling of class imbalance across all classes.  
+Logistic Regression performs poorly, with an accuracy of 0.8459 and a Kappa of 0.6855, failing to predict minority classes like Insufficient_Weight and Normal_Weight (Sensitivity 0).  
+Random Forest is the best, with the highest accuracy (0.9145) and Kappa (0.8735), making it the strongest for prediction due to its ability to handle imbalanced data and complex relationships.
+
+```{r}
+qda_cm <- confusionMatrix(qda_pred, testing_subset$obesity_level)
+rf_cm <- confusionMatrix(rf_pred, testing_subset$obesity_level)
+
+# Ensure multinom_pred levels match testing_subset$obesity_level
+multinom_pred <- factor(multinom_pred, levels = levels(testing_subset$obesity_level))
+logit_cm <- confusionMatrix(multinom_pred, testing_subset$obesity_level)
+
+print("QDA Confusion Matrix:")
+print(qda_cm)
+print("Random Forest Confusion Matrix:")
+print(rf_cm)
+print("Multinomial Multinom Regression Confusion Matrix:")
+print(logit_cm)
+
+# for a much clearer layout, this will help us decide the best model easily
+cat("QDA Accuracy:", qda_cm$overall["Accuracy"], "\n")
+cat("QDA Kappa:", qda_cm$overall["Kappa"], "\n")
+cat("Random Forest Accuracy:", rf_cm$overall["Accuracy"], "\n")
+cat("Random Forest Kappa:", rf_cm$overall["Kappa"], "\n")
+cat("Logistic Regression Accuracy:", logit_cm$overall["Accuracy"], "\n")
+cat("Logistic Regression Kappa:", logit_cm$overall["Kappa"], "\n")
+```
+
+
+---
+
+
+## ADVANCED REGRESSION
+
+For regression, I will need a numerical target variable. In the dataset, obesity_level is categorical (with 4 levels), so I’ll need to select or create a numerical target. 
+
+Based on the dataset, 'Weight' is a suitable numerical variable for regression, as it’s directly related to obesity and aligns with the focus of this study regardion eating habits and physical condition.
+
+---
+
+### Linear regression
+
+Let's fit a linear regression model to predict Weight using key predictors and focus on understanding their impact.
+
+**Results**
+
+**Most Important Variables (in order of impact based on coefficient magnitude):**
+
+- family_history_with_overweightyes (24.9 kg increase per unit)
+- transportation_typePublic Transportation (14.02 kg increase per unit)
+- eats_btw_mealsSometimes (10.79 kg increase per unit)
+- eats_high_cal_freqyes (8.92 kg increase per unit)
+- alcohol_freqno (-7.70 kg decrease per unit)
+- GenderMale (6.26 kg increase per unit)
+- physical_activity_freq (0.93 kg increase per unit)
+- Age (0.83 kg increase per unit)
+
+The most important variables influencing Weight in the linear regression model are family_history_with_overweightyes, which significantly increases Weight when there’s a family history of overweight, followed by transportation_typePublic Transportation and eats_btw_mealsSometimes, both of which are associated with higher Weight. Frequent high-calorie food intake (eats_high_cal_freqyes) also contributes to increased Weight, while not drinking alcohol (alcohol_freqno) is linked to lower Weight. Additionally, being male (GenderMale), physical activity frequency (physical_activity_freq), and older age (Age) are associated with higher Weight, though their effects are less pronounced.
+
+
+```{r}
+lm_model <- lm(Weight ~ Age + family_history_with_overweight + eats_high_cal_freq + 
+               physical_activity_freq + Gender + eats_btw_meals + alcohol_freq + 
+               transportation_type, 
+               data = training)
+
+summary(lm_model)
+```
+
+---
+
+### Comparing Ridge, Lasso, and ElasticNet
+
+Random Forest has the lowest RMSE (16.81912), significantly outperforming Ridge (20.93988), Lasso (20.9289), and Elastic Net (20.92528), which have nearly identical scores. 
+
+Random Forest is the **best model** for predictive purposes, as it better captures non-linear relationships in predictors like family_history_with_overweight and eats_high_cal_freq.
+
+The almost-identical RMSE values of Ridge, Lasso, and ElasticNet might be due to the fact that the dataset may not have enough noise or complexity for regularization differences to significantly impact performance. 
+
 
 ```{r}
 set.seed(123)
 
-train_index <- sample(1:nrow(data_clean), 0.8 * nrow(data_clean))
+x_train <- model.matrix(Weight ~ Age + family_history_with_overweight + eats_high_cal_freq + 
+                        physical_activity_freq + Gender + eats_btw_meals + alcohol_freq + 
+                        transportation_type - 1, data = training)
+y_train <- training$Weight
+x_test <- model.matrix(Weight ~ Age + family_history_with_overweight + eats_high_cal_freq + 
+                       physical_activity_freq + Gender + eats_btw_meals + alcohol_freq + 
+                       transportation_type - 1, data = testing)
+y_test <- testing$Weight
 
-train_data <- data_clean[train_index, ]
-test_data <- data_clean[-train_index, ]
+# Ridge regression
+ridge_model <- cv.glmnet(x_train, y_train, alpha = 0, type.measure = "mse")
+ridge_pred <- predict(ridge_model, newx = x_test, s = "lambda.min")
+
+# Lasso regression
+lasso_model <- cv.glmnet(x_train, y_train, alpha = 1, type.measure = "mse")
+lasso_pred <- predict(lasso_model, newx = x_test, s = "lambda.min")
+
+# Elastic Net regression
+elastic_grid <- expand.grid(alpha = seq(0, 1, by = 0.1), lambda = seq(0, 0.1, by = 0.01))
+elastic_model <- cv.glmnet(x_train, y_train, alpha = 0.5, type.measure = "mse", tuneGrid = elastic_grid)
+elastic_pred <- predict(elastic_model, newx = x_test, s = "lambda.min")
+
+# Random Forest regression
+rf_reg_model <- randomForest(Weight ~ Age + family_history_with_overweight + eats_high_cal_freq + 
+                             physical_activity_freq + Gender + eats_btw_meals + alcohol_freq + 
+                             transportation_type, 
+                             data = training, ntree = 500)
+
+rf_reg_pred <- predict(rf_reg_model, newdata = testing)
+
+rmse_ridge <- sqrt(mean((ridge_pred - y_test)^2))
+rmse_lasso <- sqrt(mean((lasso_pred - y_test)^2))
+rmse_elastic <- sqrt(mean((elastic_pred - y_test)^2))
+rmse_rf <- sqrt(mean((rf_reg_pred - y_test)^2))
+
+cat("Ridge RMSE:", rmse_ridge, "\n")
+cat("Lasso RMSE:", rmse_lasso, "\n")
+cat("Elastic Net RMSE:", rmse_elastic, "\n")
+cat("Random Forest RMSE:", rmse_rf, "\n")
+
 ```
+
+
+---
+
+
+Let's try to enhance interpretation through Variable Importance Plots
+
+The variable importance plot for the Random Forest regression model (rf_reg_model) shows family_history_with_overweight as the most influential predictor for Weight, followed by eats_btw_meals and Age. alcohol_freq, Gender, eats_high_cal_freq, transportation_type, and physical_activity_freq have progressively less importance, indicating they contribute less to the model’s predictions of Weight.
+
+
+'PDP for Age' plot shows that predicted Weight increases sharply from around 75 kg at age 20 to 90 kg by age 30, then fluctuates slightly but generally trends downward to around 85 kg by age 60, indicating a non-linear relationship where younger adults (20-30) tend to have higher predicted weights.
+
+'PDP for Family History with Overweight' plot indicates that having a family history of overweight (yes) increases the predicted Weight from about 70 kg (for no) to 90 kg, showing a strong positive effect of family history on weight, consistent with its high importance in the model.
+
+
+```{r}
+varImp(rf_reg_model)
+varImpPlot(rf_reg_model)
+
+
+# Create partial dependence plots (without plotting immediately)
+pdp_age <- partial(rf_reg_model, pred.var = "Age", plot = FALSE, rug = TRUE)
+pdp_family_history <- partial(rf_reg_model, pred.var = "family_history_with_overweight", 
+                              plot = FALSE, rug = TRUE)
+
+# Plot both PDPs together
+grid.arrange(
+  autoplot(pdp_age) + ggtitle("PDP for Age"),
+  autoplot(pdp_family_history) + ggtitle("PDP for Family History with Overweight"),
+  ncol = 2
+)
+```
+
+
+---
+
+### Gradient Boosting
+
+
+Gradient Boosting is could be beneficial to use for my study because it excels at capturing complex, non-linear relationships and interactions among predictors like family_history_with_overweight and eats_high_cal_freq, which are critical for predicting Weight.
+
+Its iterative boosting approach can improve predictive accuracy over Random Forest by focusing on correcting errors in previous iterations, making it a strong candidate for the predictive task of this study.
+
+
+REsults:
+
+Gradient Boosting achieved an RMSE of 16.88919, slightly higher than that of Random Forest’s with 16.81912 While both models perform well, **Random Forest** remains the **best** for predicting Weight due to its lower RMSE, indicating better predictive accuracy, though Gradient Boosting is a close competitor and could potentially improve with further tuning of hyperparameters
+
+
+```{r}
+set.seed(123)
+
+ctrl <- trainControl(method = "cv", number = 5)
+xgb_tune <- train(Weight ~ Age + family_history_with_overweight + eats_high_cal_freq + 
+                  physical_activity_freq + Gender + eats_btw_meals + alcohol_freq + 
+                  transportation_type, 
+                  data = training, 
+                  method = "xgbTree", 
+                  trControl = ctrl, 
+                  tuneGrid = expand.grid(nrounds = 100, max_depth = 3, eta = 0.1, 
+                                         gamma = 0, colsample_bytree = 0.8, 
+                                         min_child_weight = 1, subsample = 0.8))
+
+# predicting on the test set
+xgb_pred <- predict(xgb_tune, newdata = testing)
+
+rmse_xgb <- sqrt(mean((xgb_pred - testing$Weight)^2))
+
+cat("Gradient Boosting RMSE:", rmse_xgb, "\n")
+
+```
+
+
+---
+
+### Ensemble
+
+
+Ensemble methods are relevant to this study because they combine predictions from multiple models (such as Random Forest, Gradient Boosting, Ridge) to improve overall predictive accuracy for Weight, potentially reducing errors by leveraging the strengths of each model. 
+
+This approach can enhance my approach to the question at hand by balancing Random Forest’s ability to capture non-linear relationships with Ridge’s stability in handling linear effects, making it a practical way to achieve better performance in your obesity study.
+
+Results:
+
+The Ensemble method, although combining Random Forest, Gradient Boosting, and Ridge, returns an RMSE of 17.70022, which is higher than Random Forest’s and Gradient Boosting’s RMSEs. 
+
+Despite including Random Forest, the ensemble performs worse because averaging with higher values of RMSE of Ridge distorts the predictive power of the stronger models.
+
+These results enable us to say that the **Random Forest remains the best model** so far with the lowest RMSE (16.81912), outperforming Gradient Boosting (16.88919) and the Ensemble (17.70022), making it the most accurate for predicting Weight due to its ability to handle non-linear relationships and interactions among predictors.
+
+
+```{r}
+
+# combining predictions from other methods
+ensemble_pred <- (rf_reg_pred + xgb_pred + ridge_pred) / 3
+
+rmse_ensemble <- sqrt(mean((ensemble_pred - testing$Weight)^2))
+
+cat("Ensemble RMSE:", rmse_ensemble, "\n")
+
+```
+
+
+---
+
+
+## CONCLUSION
+
+
+This study aimed to address two key questions: first, to classify individuals into obesity levels (Insufficient Weight, Normal Weight, Overweight, Obesity) based on demographic and lifestyle factors, and second, to predict individual weight as a numerical outcome to understand the impact of these factors. For the classification task, we employed QDA, Multinomial Logistic Regression, and Random Forest, using techniques like SMOTE for balancing the training data, cross-validation with caret, and threshold adjustments to improve minority class predictions. Random Forest emerged as the superior model with an accuracy of 0.9145 and Kappa of 0.8735, effectively handling class imbalance and providing robust predictions. 
+
+For the advanced regression task, we started with linear regression to interpret key predictors, identifying family_history_with_overweightyes as the most impactful, then explored Ridge, Lasso, Elastic Net, Random Forest, Gradient Boosting, and an ensemble method for prediction. Random Forest again outperformed others with the lowest RMSE of 16.81912, compared to Gradient Boosting (16.88919) and the ensemble (17.70022), due to its ability to capture non-linear relationships. We also used variable importance and partial dependence plots to enhance interpretability, confirming the significant influence of family history and eating habits on weight. These findings underscore the importance of non-linear models in obesity studies and suggest that family history and dietary behaviors are critical factors for both classification and prediction, offering valuable insights for health interventions and future research into obesity risk factors.
+
+
+The study also faced several limitations and challenges. In the classification task, the imbalanced test set led to poor initial performance for Random Forest (accuracy 0.2352), despite high cross-validated accuracy (0.9412), requiring adjustments like threshold tuning and ensuring consistent factor levels across datasets.
+
+For the advanced regression task, the log transformation of Weight did not significantly improve RMSE, indicating limited skewness in the target variable. Additionally, the ensemble method underperformed (RMSE 17.70022) due to the weaker contribution of Ridge, highlighting the challenge of effectively combining models with differing strengths in capturing non-linear relationships.
+
+
+
+---
+
+
+
 
 
